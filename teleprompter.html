@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>טלפרומטר מקצועי</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root { --accent:#e63946; --ui-bg:rgba(10,10,10,0.9); --ui-border:rgba(255,255,255,0.09); }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Heebo',sans-serif;background:#000;color:#fff;overflow:hidden;height:100vh;width:100vw;}
+#pip{position:fixed;z-index:5;width:320px;height:180px;top:calc(100vh - 290px);left:16px;border-radius:8px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.55);cursor:move;user-select:none;transition:opacity 0.2s;}
+#pip.hidden{display:none;}
+#pip video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;background:#000;pointer-events:none;}
+#pip-resize{position:absolute;bottom:0;right:0;width:30px;height:30px;cursor:nwse-resize;z-index:10;}
+#pip-resize::after{content:'';position:absolute;bottom:5px;right:5px;width:0;height:0;border-style:solid;border-width:0 0 16px 16px;border-color:transparent transparent rgba(255,255,255,0.8) transparent;}
+#text-layer{position:fixed;inset:0;z-index:3;overflow-y:auto;scrollbar-width:none;pointer-events:none;}
+#text-layer::-webkit-scrollbar{display:none;}
+#text{padding:400px 400px;font-size:130px;line-height:1.6;direction:rtl;unicode-bidi:plaintext;text-align:right;word-break:break-word;color:#fff;pointer-events:all;}
+#toolbar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--ui-bg);border-bottom:1px solid var(--ui-border);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:7px 12px;}
+#toolbar.bottom{top:auto;bottom:0;border-bottom:none;border-top:1px solid var(--ui-border);}
+.sep{width:1px;height:22px;background:var(--ui-border);flex-shrink:0;}
+.lbl{font-size:11px;color:rgba(255,255,255,0.38);white-space:nowrap;}
+.vbg{font-size:11px;color:rgba(255,255,255,0.45);min-width:30px;text-align:center;}
+button{padding:5px 11px;border:1px solid var(--ui-border);background:rgba(255,255,255,0.06);color:#fff;border-radius:6px;cursor:pointer;font-family:'Heebo',sans-serif;font-size:13px;white-space:nowrap;transition:background .15s;}
+button:hover{background:rgba(255,255,255,0.13);}
+button.active{background:var(--accent);border-color:transparent;}
+button:disabled{opacity:0.45;cursor:default;}
+#rec-btn{background:var(--accent);border-color:transparent;}
+#rec-btn.recording{animation:pulse 1.2s infinite;}
+@keyframes pulse{0%,100%{background:var(--accent)}50%{background:#9b1b26}}
+input[type=range]{-webkit-appearance:none;width:80px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;cursor:pointer;}
+input[type=color]{width:26px;height:26px;border:1px solid var(--ui-border);border-radius:4px;background:none;cursor:pointer;padding:2px;}
+#countdown{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:opacity .25s;}
+#countdown.on{opacity:1;pointer-events:all;}
+#cd-num{font-size:260px;font-weight:700;color:#fff;line-height:1;opacity:0;transform:scale(1.3);}
+#cd-num.pop{animation:cdpop .88s ease-out forwards;}
+@keyframes cdpop{0%{opacity:1;transform:scale(1.25);}75%{opacity:1;transform:scale(1.0);}100%{opacity:0;transform:scale(.88);}}
+#rec-badge{position:fixed;top:56px;left:16px;z-index:120;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.7);padding:6px 14px;border-radius:20px;font-size:14px;font-weight:700;color:#fff;opacity:0;pointer-events:none;transition:opacity .3s;border:1px solid rgba(230,57,70,0.3);}
+#rec-badge.on{opacity:1;}
+#rec-dot{width:10px;height:10px;background:var(--accent);border-radius:50%;animation:blink 1s infinite;}
+#rec-timer{font-family:monospace;color:var(--accent);min-width:45px;text-align:left;direction:ltr;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+#proc-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:18px;}
+#proc-overlay.on{display:flex;}
+#proc-title{font-size:22px;font-weight:700;}
+#proc-sub{font-size:13px;color:rgba(255,255,255,0.45);text-align:center;max-width:340px;line-height:1.6;}
+#proc-bar-wrap{width:300px;height:7px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;}
+#proc-bar{height:100%;width:0%;background:var(--accent);border-radius:4px;transition:width 0.2s;}
+#proc-pct{font-size:12px;color:rgba(255,255,255,0.35);}
+</style>
+</head>
+<body>
+
+<div id="pip" class="hidden">
+    <video id="cam-video" autoplay playsinline muted></video>
+    <div id="pip-resize"></div>
+</div>
+
+<div id="text-layer">
+    <div id="text" contenteditable="true">הקלד את הטקסט שלך כאן...</div>
+</div>
+
+<div id="rec-badge">
+    <div id="rec-dot"></div><span>REC</span>
+    <div id="rec-timer">00:00</div>
+</div>
+
+<div id="countdown"><div id="cd-num"></div></div>
+
+<div id="proc-overlay">
+    <div id="proc-title">📦 מכין קובץ וידאו...</div>
+    <div id="proc-sub">אנא המתן</div>
+    <div id="proc-bar-wrap"><div id="proc-bar"></div></div>
+    <div id="proc-pct">0%</div>
+</div>
+
+<div id="toolbar">
+    <button id="play-btn" onclick="togglePlay()">▶ הפעל</button>
+    <button onclick="backToTop()">⏮</button>
+    <div class="sep"></div>
+    <span class="lbl">מהירות</span>
+    <input type="range" id="spd" min="1" max="100" value="30" oninput="$('spd-v').innerText=this.value">
+    <span class="vbg" id="spd-v">30</span>
+    <div class="sep"></div>
+    <span class="lbl">גודל</span>
+    <input type="range" id="fsz" min="20" max="200" value="130" oninput="textEl.style.fontSize=this.value+'px';$('fsz-v').innerText=this.value">
+    <span class="vbg" id="fsz-v">130</span>
+    <div class="sep"></div>
+    <span class="lbl">שוליים</span>
+    <input type="range" id="mgn" min="0" max="600" value="400" oninput="setMargin(this.value)">
+    <span class="vbg" id="mgn-v">400</span>
+    <div class="sep"></div>
+    <span class="lbl">שקיפות טקסט</span>
+    <input type="range" id="txop" min="10" max="100" value="100" oninput="textEl.style.opacity=this.value/100;$('txop-v').innerText=this.value+'%'">
+    <span class="vbg" id="txop-v">100%</span>
+    <div class="sep"></div>
+    <button onclick="fmt('bold')"><b>B</b></button>
+    <button onclick="fmt('underline')"><u>U</u></button>
+    <input type="color" onchange="fmt('foreColor',this.value)" title="צבע מסומן">
+    <input type="color" id="txt-col" value="#ffffff" oninput="textEl.style.color=this.value">
+    <span class="lbl">טקסט</span>
+    <input type="color" id="bg-col" value="#000000" oninput="document.body.style.background=this.value">
+    <span class="lbl">רקע</span>
+    <div class="sep"></div>
+    <button id="cam-btn" onclick="toggleCamera()">📷 מצלמה</button>
+    <span id="pip-op-wrap" style="display:none;align-items:center;gap:5px;">
+        <span class="lbl">שקיפות מצלמה</span>
+        <input type="range" id="pip-op" min="0" max="100" value="100" oninput="pipEl.style.opacity=this.value/100;$('pip-op-v').innerText=this.value+'%'">
+        <span class="vbg" id="pip-op-v">100%</span>
+    </span>
+    <div class="sep"></div>
+    <button id="rec-btn" onclick="toggleRecord()">⏺ הקלט</button>
+    <div class="sep"></div>
+    <button onclick="toggleMenu()">⇅</button>
+    <button onclick="saveProject()">💾</button>
+    <button onclick="$('file-in').click()">📂</button>
+    <input type="file" id="file-in" style="display:none" onchange="loadProject(event)">
+</div>
+
+<!-- ts-ebml: fixes WebM cues/index so the file is fully seekable -->
+<script src="https://unpkg.com/ts-ebml@2.0.2/dist/ts-ebml.js"></script>
+
+<script>
+const $=id=>document.getElementById(id);
+const pipEl=$('pip'),textEl=$('text'),playBtn=$('play-btn'),recBtn=$('rec-btn'),
+      recBadge=$('rec-badge'),cdEl=$('countdown'),cdNum=$('cd-num'),
+      camBtn=$('cam-btn'),pipWrap=$('pip-op-wrap'),contentEl=$('text-layer'),
+      procOvl=$('proc-overlay'),procBar=$('proc-bar'),procPct=$('proc-pct'),procSub=$('proc-sub');
+
+/* ── scroll ── */
+let playing=false,scrollFloat=0;
+function spdPx(){return Math.pow(+$('spd').value/100,2)*8;}
+(function loop(){
+    if(playing){
+        scrollFloat+=spdPx(); contentEl.scrollTop=scrollFloat;
+        if(contentEl.scrollTop+contentEl.clientHeight>=contentEl.scrollHeight-2){playing=false;refreshPlay();}
+    }else{scrollFloat=contentEl.scrollTop;}
+    requestAnimationFrame(loop);
+})();
+function togglePlay(){playing=!playing;refreshPlay();}
+function refreshPlay(){playBtn.textContent=playing?'⏸ השהה':'▶ הפעל';playBtn.classList.toggle('active',playing);}
+function backToTop(){playing=false;refreshPlay();contentEl.scrollTop=scrollFloat=0;}
+textEl.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,e.clipboardData.getData('text/plain'));});
+function setMargin(v){textEl.style.paddingLeft=textEl.style.paddingRight=v+'px';textEl.style.paddingTop=textEl.style.paddingBottom='400px';$('mgn-v').innerText=v;}
+setMargin(400);textEl.style.fontSize='130px';
+function fmt(cmd,val){document.execCommand(cmd,false,val||null);}
+
+/* ── camera ── */
+let cameraOn=false,mediaStream=null,pipAR=16/9;
+async function toggleCamera(){
+    if(!cameraOn){
+        try{
+            mediaStream=await navigator.mediaDevices.getUserMedia({
+                video:{width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30},facingMode:'user'},
+                audio:{echoCancellation:false,noiseSuppression:false,sampleRate:48000,channelCount:2}
+            });
+            $('cam-video').srcObject=mediaStream;
+            $('cam-video').onloadedmetadata=()=>{
+                const vw=$('cam-video').videoWidth||1280,vh=$('cam-video').videoHeight||720;
+                pipAR=vw/vh; pipEl.style.height=Math.round(pipEl.offsetWidth/pipAR)+'px';
+            };
+            pipEl.classList.remove('hidden');pipWrap.style.display='flex';
+            camBtn.classList.add('active');camBtn.textContent='📷 כבה';cameraOn=true;
+        }catch(err){alert('לא ניתן לגשת למצלמה:\n'+err.message);}
+    }else{
+        if(isRecording)stopRecording();
+        mediaStream?.getTracks().forEach(t=>t.stop());
+        mediaStream=null;$('cam-video').srcObject=null;
+        pipEl.classList.add('hidden');pipWrap.style.display='none';
+        camBtn.classList.remove('active');camBtn.textContent='📷 מצלמה';cameraOn=false;
+    }
+}
+
+/* ── PiP drag & resize ── */
+(function(){
+    let drag=false,rsz=false,startX,startY,startLeft,startTop,startWidth;
+    pipEl.addEventListener('mouseenter',()=>{textEl.style.pointerEvents='none';});
+    pipEl.addEventListener('mouseleave',()=>{if(!drag&&!rsz)textEl.style.pointerEvents='all';});
+    pipEl.addEventListener('mousedown',e=>{
+        if(e.target===$('pip-resize')){rsz=true;startX=e.clientX;startWidth=pipEl.offsetWidth;}
+        else{drag=true;startX=e.clientX;startY=e.clientY;const r=pipEl.getBoundingClientRect();startLeft=r.left;startTop=r.top;}
+        e.preventDefault();e.stopPropagation();
+    });
+    document.addEventListener('mousemove',e=>{
+        if(drag){pipEl.style.left=(startLeft+(e.clientX-startX))+'px';pipEl.style.top=(startTop+(e.clientY-startY))+'px';}
+        if(rsz){const w=Math.max(120,startWidth+(e.clientX-startX));pipEl.style.width=w+'px';pipEl.style.height=Math.round(w/pipAR)+'px';}
+    });
+    document.addEventListener('mouseup',()=>{drag=false;rsz=false;textEl.style.pointerEvents='all';});
+})();
+
+/* ── recording ── */
+let mediaRecorder=null,chunks=[],isRecording=false,recInterval=null,secondsElapsed=0;
+function fmtTime(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function toggleRecord(){isRecording?stopRecording():startFlow();}
+
+async function startFlow(){
+    if(!cameraOn)await toggleCamera();
+    if(!cameraOn)return;
+    await runCountdown();
+    startRecording();
+}
+
+async function runCountdown(){
+    cdEl.classList.add('on');
+    for(const n of [3,2,1]){
+        cdNum.textContent=n;cdNum.classList.remove('pop');
+        void cdNum.offsetWidth;cdNum.classList.add('pop');
+        await new Promise(r=>setTimeout(r,900));
+    }
+    cdEl.classList.remove('on');
+}
+
+function startRecording(){
+    chunks=[];
+    const webmTypes=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+    const mime=webmTypes.find(t=>MediaRecorder.isTypeSupported(t))||'video/webm';
+    const opts={mimeType:mime,videoBitsPerSecond:8_000_000,audioBitsPerSecond:192_000};
+    try{mediaRecorder=new MediaRecorder(mediaStream,opts);}
+    catch(e){mediaRecorder=new MediaRecorder(mediaStream);}
+    mediaRecorder.ondataavailable=e=>{if(e.data?.size>0)chunks.push(e.data);};
+    mediaRecorder.onstop=handleStop;
+    mediaRecorder.start(100); // 100ms chunks for better seeking granularity
+    isRecording=true;
+    recBtn.textContent='⏹ עצור';recBtn.classList.add('recording');
+    recBadge.classList.add('on');
+    secondsElapsed=0;$('rec-timer').innerText='00:00';
+    recInterval=setInterval(()=>{secondsElapsed++;$('rec-timer').innerText=fmtTime(secondsElapsed);},1000);
+    playing=true;refreshPlay();
+}
+
+function stopRecording(){
+    if(mediaRecorder?.state!=='inactive')mediaRecorder.stop();
+    clearInterval(recInterval);
+    isRecording=false;
+    recBtn.textContent='⏺ הקלט';recBtn.classList.remove('recording');
+    recBadge.classList.remove('on');
+    playing=false;refreshPlay();
+}
+
+async function handleStop(){
+    procOvl.classList.add('on');
+    procSub.innerText='מתקן index לקובץ וידאו...';
+    procBar.style.width='30%';procPct.innerText='30%';
+    recBtn.disabled=true;
+
+    try{
+        const rawBlob=new Blob(chunks,{type:'video/webm'});
+
+        // Use ts-ebml to inject proper Cues (seek index) into the WebM
+        // This makes the file fully seekable in any player/editor
+        const fixedBlob = await fixWebMSeekability(rawBlob);
+
+        procBar.style.width='100%';procPct.innerText='100%';
+        await new Promise(r=>setTimeout(r,300));
+        procOvl.classList.remove('on');
+        recBtn.disabled=false;
+
+        // Download as .webm — fully seekable, plays everywhere
+        downloadBlob(fixedBlob,'teleprompter-recording.webm');
+
+    }catch(err){
+        console.error('Fix error:',err);
+        // Fallback: download raw anyway
+        procOvl.classList.remove('on');
+        recBtn.disabled=false;
+        downloadBlob(new Blob(chunks,{type:'video/webm'}),'teleprompter-recording.webm');
+    }
+}
+
+/**
+ * Reads the raw WebM blob, parses it with ts-ebml,
+ * injects Cues (the seek index), and returns a fixed Blob.
+ * The resulting file is seekable in VLC, Chrome, Windows Media Player,
+ * Premiere, DaVinci, OneDrive, etc.
+ */
+async function fixWebMSeekability(blob){
+    // If ts-ebml didn't load, return raw blob
+    if(typeof EBML === 'undefined') return blob;
+
+    const arrayBuffer = await blob.arrayBuffer();
+    const decoder = new EBML.Decoder();
+    const reader  = new EBML.Reader();
+    reader.logging = false;
+    reader.drop_default_duration = false;
+
+    const elms = decoder.decode(arrayBuffer);
+    elms.forEach(elm => reader.read(elm));
+    reader.stop();
+
+    const refinedMetadataBuf = EBML.tools.makeMetadataSeekable(
+        reader.metadatas, reader.duration, reader.cues
+    );
+
+    const body = arrayBuffer.slice(reader.metadataSize);
+    const fixed = new Blob([refinedMetadataBuf, body], {type:'video/webm'});
+    return fixed;
+}
+
+function downloadBlob(blob,name){
+    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:name});
+    a.click();URL.revokeObjectURL(a.href);
+}
+
+let isBottom=false;
+function toggleMenu(){isBottom=!isBottom;$('toolbar').classList.toggle('bottom',isBottom);}
+
+function saveProject(){
+    const d={html:textEl.innerHTML,speed:$('spd').value,fontSize:$('fsz').value,margin:$('mgn').value,
+        textColor:$('txt-col').value,bgColor:$('bg-col').value,textOpacity:$('txop').value,menuBottom:isBottom};
+    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'})),download:'teleprompter.json'});
+    a.click();
+}
+
+function loadProject(e){
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>{
+        try{
+            const d=JSON.parse(r.result);
+            textEl.innerHTML=d.html||'טקסט';
+            $('spd').value=d.speed||30;$('spd-v').innerText=$('spd').value;
+            $('fsz').value=d.fontSize||130;$('fsz-v').innerText=$('fsz').value;textEl.style.fontSize=$('fsz').value+'px';
+            $('mgn').value=d.margin||400;setMargin($('mgn').value);
+            if(d.textColor){$('txt-col').value=d.textColor;textEl.style.color=d.textColor;}
+            if(d.bgColor){$('bg-col').value=d.bgColor;document.body.style.background=d.bgColor;}
+            if(d.textOpacity){$('txop').value=d.textOpacity;textEl.style.opacity=d.textOpacity/100;$('txop-v').innerText=d.textOpacity+'%';}
+            isBottom=!!d.menuBottom;$('toolbar').classList.toggle('bottom',isBottom);
+        }catch{alert('קובץ לא תקין');}
+    };
+    r.readAsText(f);
+}
+
+document.addEventListener('keydown',e=>{
+    if(document.activeElement===textEl)return;
+    if(e.code==='Space'){e.preventDefault();togglePlay();}
+    if(e.code==='ArrowUp'){e.preventDefault();const s=$('spd');s.value=Math.min(100,+s.value+5);$('spd-v').innerText=s.value;}
+    if(e.code==='ArrowDown'){e.preventDefault();const s=$('spd');s.value=Math.max(1,+s.value-5);$('spd-v').innerText=s.value;}
+    if(e.code==='Home'){e.preventDefault();backToTop();}
+});
+</script>
+</body>
+</html>
