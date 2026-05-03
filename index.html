@@ -43,9 +43,23 @@ input[type=range]{-webkit-appearance:none;width:72px;height:4px;border-radius:2p
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;cursor:pointer;}
 input[type=color]{width:26px;height:26px;border:1px solid var(--ui-border);border-radius:4px;background:none;cursor:pointer;padding:2px;}
 
-/* alignment buttons */
+/* play button active = blue, not red */
+#play-btn.active{background:#2563eb;border-color:transparent;}
+#play-btn.active:hover{background:#1d4ed8;}
+
+/* cam btn: never show accent red */
+#cam-btn.active{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.3);color:#fff;}
 .align-btn{font-size:14px;padding:4px 9px;}
 .align-btn.active-align{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.3);}
+
+/* global colors zone — distinct background pill */
+.global-zone{
+    display:flex;align-items:center;gap:5px;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.16);
+    border-radius:8px;
+    padding:3px 10px;
+}
 
 /* ── Edit modal (notepad) ── */
 #edit-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;}
@@ -172,11 +186,13 @@ input[type=color]{width:26px;height:26px;border:1px solid var(--ui-border);borde
     <div class="sep"></div>
 
     <!-- Global colors — clearly separated (#5) -->
-    <span class="lbl">גלובלי</span>
-    <input type="color" id="txt-col" value="#ffffff" oninput="textEl.style.color=this.value" title="צבע טקסט כולל">
-    <span class="lbl">טקסט</span>
-    <input type="color" id="bg-col" value="#000000" oninput="document.body.style.background=this.value" title="צבע רקע">
-    <span class="lbl">רקע</span>
+    <div class="global-zone">
+        <span class="lbl">גלובלי</span>
+        <input type="color" id="txt-col" value="#ffffff" oninput="textEl.style.color=this.value" title="צבע טקסט כולל">
+        <span class="lbl">טקסט</span>
+        <input type="color" id="bg-col" value="#000000" oninput="document.body.style.background=this.value" title="צבע רקע">
+        <span class="lbl">רקע</span>
+    </div>
 
     <div class="sep"></div>
 
@@ -389,8 +405,13 @@ async function fixWebMSeekability(blob){
     return new Blob([refinedMetadataBuf,body],{type:'video/webm'});
 }
 function downloadBlob(blob,name){
-    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:name});
-    a.click();URL.revokeObjectURL(a.href);
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{href:url,download:name});
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke after delay so browser completes the download before cleanup
+    setTimeout(()=>URL.revokeObjectURL(url), 10000);
 }
 
 let isBottom=false;
@@ -400,8 +421,10 @@ function saveProject(){
     const d={html:textEl.innerHTML,speed:$('spd').value,fontSize:$('fsz').value,margin:$('mgn').value,
         textColor:$('txt-col').value,bgColor:$('bg-col').value,menuBottom:isBottom,
         textAlign:textEl.style.textAlign||'center'};
-    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'})),download:'teleprompter.json'});
-    a.click();
+    const url=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'}));
+    const a=Object.assign(document.createElement('a'),{href:url,download:'teleprompter.json'});
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 function loadProject(e){
     const f=e.target.files[0];if(!f)return;
